@@ -7,7 +7,7 @@ import torch.utils.tensorboard as tb
 import numpy as np
 
 
-from .models import ClassificationLoss, load_model, save_model
+from .models import load_model, save_model
 from .utils import load_data
 
 
@@ -46,7 +46,7 @@ def train(
     val_data = load_data("classification_data/val", shuffle=False)
 
     # Create loss function and optimizer
-    loss_func = ClassificationLoss()
+    loss_func = torch.nn.ClassificationLoss()
     optimizer = optim.Adam(model.parameters(), lr=lr)
 
     global_step = 0

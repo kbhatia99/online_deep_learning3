@@ -141,18 +141,6 @@ MODEL_FACTORY = {
     "detector": Detector,
 }
 
-def ClassificationLoss(logits: torch.Tensor, labels: torch.Tensor) -> torch.Tensor:
-    """
-    Cross-Entropy Loss for Classification
-
-    Args:
-        logits: Raw model outputs, shape (b, num_classes)
-        labels: Ground truth labels, shape (b,)
-    
-    Returns:
-        Cross-entropy loss value
-    """
-    return F.cross_entropy(logits, labels)
 
 def load_model(
     model_name: str,
