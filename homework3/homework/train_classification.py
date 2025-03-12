@@ -8,7 +8,7 @@ import numpy as np
 
 
 from .models import load_model, save_model
-from .utils import load_data
+from homework.datasets.road_dataset import load_data
 
 
 def train(
