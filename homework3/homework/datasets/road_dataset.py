@@ -1,5 +1,4 @@
 from pathlib import Path
-
 import numpy as np
 from torch.utils.data import ConcatDataset, DataLoader, Dataset
 
@@ -21,8 +20,8 @@ class RoadDataset(Dataset):
 
         self.episode_path = Path(episode_path)
 
+        # Load track and frame data
         info = np.load(self.episode_path / "info.npz", allow_pickle=True)
-
         self.track = Track(**info["track"].item())
         self.frames: dict[str, np.ndarray] = {k: np.stack(v) for k, v in info["frames"].item().items()}
         self.transform = self.get_transform(transform_pipeline)
@@ -39,7 +38,17 @@ class RoadDataset(Dataset):
                 ]
             )
         elif transform_pipeline == "aug":
-            pass
+            xform = road_transforms.Compose(
+                [
+                    road_transforms.ImageLoader(self.episode_path),
+                    road_transforms.DepthLoader(self.episode_path),
+                    road_transforms.TrackProcessor(self.track),
+                    road_transforms.RandomHorizontalFlip(),
+                    road_transforms.RandomRotation(30),
+                    road_transforms.ColorJitter(brightness=0.5, contrast=0.5, saturation=0.5, hue=0.5),
+                    road_transforms.RandomResizedCrop(64, scale=(0.8, 1.0)),
+                ]
+            )
 
         if xform is None:
             raise ValueError(f"Invalid transform {transform_pipeline} specified!")
@@ -57,7 +66,7 @@ class RoadDataset(Dataset):
         sample = {"_idx": idx, "_frames": self.frames}
         sample = self.transform(sample)
 
-        # remove private keys
+        # remove private keys (those starting with '_')
         for key in list(sample.keys()):
             if key.startswith("_"):
                 sample.pop(key)
@@ -110,3 +119,4 @@ def load_data(
         batch_size=batch_size,
         shuffle=shuffle,
     )
+

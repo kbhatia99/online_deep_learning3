@@ -1,5 +1,4 @@
 from pathlib import Path
-
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -10,62 +9,51 @@ INPUT_STD = [0.2064, 0.1944, 0.2252]
 
 
 class Classifier(nn.Module):
-    def __init__(self):
-        super(Classifier, self).__init__()
+    def __init__(
+        self,
+        in_channels: int = 3,
+        num_classes: int = 6,
+    ):
+        """
+        A convolutional network for image classification.
 
-        self.conv_layers = nn.Sequential(
-            nn.Conv2d(3, 32, kernel_size=3, padding=1),
-            nn.BatchNorm2d(32),
-            nn.ReLU(),
-            nn.MaxPool2d(2),
+        Args:
+            in_channels: int, number of input channels
+            num_classes: int
+        """
+        super().__init__()
 
-            nn.Conv2d(32, 64, kernel_size=3, padding=1),
-            nn.BatchNorm2d(64),
-            nn.ReLU(),
-            nn.MaxPool2d(2),
+        self.register_buffer("input_mean", torch.as_tensor(INPUT_MEAN))
+        self.register_buffer("input_std", torch.as_tensor(INPUT_STD))
 
-            nn.Conv2d(64, 128, kernel_size=3, padding=1),
-            nn.BatchNorm2d(128),
-            nn.ReLU(),
-            nn.MaxPool2d(2),
+        # Define the model architecture here (convolutional layers, FC layers, etc.)
+        self.conv1 = nn.Conv2d(in_channels, 64, kernel_size=3, padding=1)
+        self.conv2 = nn.Conv2d(64, 128, kernel_size=3, padding=1)
+        self.fc1 = nn.Linear(128 * 64 * 64, 1024)
+        self.fc2 = nn.Linear(1024, num_classes)
 
-            nn.Conv2d(128, 256, kernel_size=3, padding=1),
-            nn.BatchNorm2d(256),
-            nn.ReLU(),
-            nn.MaxPool2d(2),
-        )
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """
+        Args:
+            x: tensor (b, 3, h, w) image
 
-        self.fc_layers = nn.Sequential(
-            nn.Linear(256 * 4 * 4, 512),
-            nn.ReLU(),
-            nn.Dropout(0.5),
+        Returns:
+            tensor (b, num_classes) logits
+        """
+        z = (x - self.input_mean[None, :, None, None]) / self.input_std[None, :, None, None]
 
-            nn.Linear(512, 6)  # 6 classes
-        )
+        x = torch.relu(self.conv1(z))
+        x = torch.relu(self.conv2(x))
+        x = x.view(x.size(0), -1)  # Flatten the output for the fully connected layers
+        x = torch.relu(self.fc1(x))
+        logits = self.fc2(x)
 
-    def forward(self, x):
-        x = self.conv_layers(x)
-        x = x.view(x.shape[0], -1)
-        x = self.fc_layers(x)
-        return x
-
-
-def load_model(model_name, **kwargs):
-    if model_name == "classifier":
-        return Classifier()
-    else:
-        raise ValueError(f"Unknown model name: {model_name}")
-
-
-def save_model(model):
-    torch.save(model.state_dict(), "best_model.pth")
-
+        return logits
 
     def predict(self, x: torch.Tensor) -> torch.Tensor:
         """
         Used for inference, returns class labels
         This is what the AccuracyMetric uses as input (this is what the grader will use!).
-        You should not have to modify this function.
 
         Args:
             x (torch.FloatTensor): image with shape (b, 3, h, w) and vals in [0, 1]
@@ -94,8 +82,13 @@ class Detector(torch.nn.Module):
         self.register_buffer("input_mean", torch.as_tensor(INPUT_MEAN))
         self.register_buffer("input_std", torch.as_tensor(INPUT_STD))
 
-        # TODO: implement
-        pass
+        # Define the model architecture here (convolutional layers, etc.)
+        self.conv1 = nn.Conv2d(in_channels, 64, kernel_size=3, padding=1)
+        self.conv2 = nn.Conv2d(64, 128, kernel_size=3, padding=1)
+        self.fc1 = nn.Linear(128 * 64 * 64, 1024)
+        self.fc2 = nn.Linear(1024, num_classes)
+
+        self.depth_fc = nn.Linear(1024, 1)
 
     def forward(self, x: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:
         """
@@ -110,19 +103,21 @@ class Detector(torch.nn.Module):
                 - logits (b, num_classes, h, w)
                 - depth (b, h, w)
         """
-        # optional: normalizes the input
         z = (x - self.input_mean[None, :, None, None]) / self.input_std[None, :, None, None]
 
-        # TODO: replace with actual forward pass
-        logits = torch.randn(x.size(0), 3, x.size(2), x.size(3))
-        raw_depth = torch.rand(x.size(0), x.size(2), x.size(3))
+        x = torch.relu(self.conv1(z))
+        x = torch.relu(self.conv2(x))
+        x = x.view(x.size(0), -1)  # Flatten the output for the fully connected layers
+        x = torch.relu(self.fc1(x))
+        logits = self.fc2(x)
+
+        raw_depth = self.depth_fc(x).view(x.size(0), -1)
 
         return logits, raw_depth
 
     def predict(self, x: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:
         """
         Used for inference, takes an image and returns class labels and normalized depth.
-        This is what the metrics use as input (this is what the grader will use!).
 
         Args:
             x (torch.FloatTensor): image with shape (b, 3, h, w) and vals in [0, 1]
@@ -146,6 +141,18 @@ MODEL_FACTORY = {
     "detector": Detector,
 }
 
+def ClassificationLoss(logits: torch.Tensor, labels: torch.Tensor) -> torch.Tensor:
+    """
+    Cross-Entropy Loss for Classification
+
+    Args:
+        logits: Raw model outputs, shape (b, num_classes)
+        labels: Ground truth labels, shape (b,)
+    
+    Returns:
+        Cross-entropy loss value
+    """
+    return F.cross_entropy(logits, labels)
 
 def load_model(
     model_name: str,
@@ -196,7 +203,6 @@ def save_model(model: torch.nn.Module) -> str:
     return output_path
 
 
-
 def calculate_model_size_mb(model: torch.nn.Module) -> float:
     """
     Args:
@@ -212,8 +218,7 @@ def debug_model(batch_size: int = 1):
     """
     Test your model implementation
 
-    Feel free to add additional checks to this function -
-    this function is NOT used for grading
+    Feel free to add additional checks to this function - this function is NOT used for grading
     """
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     sample_batch = torch.rand(batch_size, 3, 64, 64).to(device)

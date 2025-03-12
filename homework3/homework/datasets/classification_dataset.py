@@ -1,6 +1,5 @@
 import csv
 from pathlib import Path
-
 from PIL import Image
 from torch.utils.data import DataLoader, Dataset
 from torchvision import transforms
@@ -38,9 +37,10 @@ class SuperTuxDataset(Dataset):
             # construct your custom augmentation
             xform = transforms.Compose(
                 [
-                    # TODO: fix
-                    # transforms.ColorJitter(0.9, 0.9, 0.9, 0.1),
                     transforms.RandomHorizontalFlip(),
+                    transforms.ColorJitter(brightness=0.5, contrast=0.5, saturation=0.5, hue=0.5),
+                    transforms.RandomRotation(30),
+                    transforms.RandomResizedCrop(64, scale=(0.8, 1.0)),
                     transforms.ToTensor(),
                 ]
             )
@@ -96,5 +96,5 @@ def load_data(
         num_workers=num_workers,
         batch_size=batch_size,
         shuffle=shuffle,
-        drop_last=True,
     )
+
