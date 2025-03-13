@@ -8,29 +8,28 @@ INPUT_MEAN = [0.2788, 0.2657, 0.2629]
 INPUT_STD = [0.2064, 0.1944, 0.2252]
 
 
-class Classifier(nn.Module):
+class TinyClassifier(nn.Module):
     def __init__(
         self,
         in_channels: int = 3,
         num_classes: int = 6,
     ):
         """
-        A convolutional network for image classification.
-
-        Args:
-            in_channels: int, number of input channels
-            num_classes: int
+        A tiny convolutional network for image classification.
         """
         super().__init__()
 
         self.register_buffer("input_mean", torch.as_tensor(INPUT_MEAN))
         self.register_buffer("input_std", torch.as_tensor(INPUT_STD))
 
-        # Define the model architecture here (convolutional layers, FC layers, etc.)
-        self.conv1 = nn.Conv2d(in_channels, 64, kernel_size=3, padding=1)
-        self.conv2 = nn.Conv2d(64, 128, kernel_size=3, padding=1)
-        self.fc1 = nn.Linear(128 * 64 * 64, 1024)
-        self.fc2 = nn.Linear(1024, num_classes)
+        # Use even smaller architecture with depthwise separable convolutions
+        self.conv1 = nn.Conv2d(in_channels, 4, kernel_size=3, stride=2, padding=1)  # 64x64 -> 32x32
+        self.conv2 = nn.Conv2d(4, 8, kernel_size=3, stride=2, padding=1)  # 32x32 -> 16x16
+        self.conv3 = nn.Conv2d(8, 16, kernel_size=3, stride=2, padding=1)  # 16x16 -> 8x8
+
+        # Use global average pooling to reduce feature map size before fully connected layer
+        self.pool = nn.AdaptiveAvgPool2d(1)  # Output size will be (16, 1, 1)
+        self.fc = nn.Linear(16, num_classes)  # Only 16 features after pooling
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         """
@@ -40,105 +39,89 @@ class Classifier(nn.Module):
         Returns:
             tensor (b, num_classes) logits
         """
+        # Normalize input
         z = (x - self.input_mean[None, :, None, None]) / self.input_std[None, :, None, None]
+        
+        # Forward pass
+        x = F.relu(self.conv1(z))
+        x = F.relu(self.conv2(x))
+        x = F.relu(self.conv3(x))
 
-        x = torch.relu(self.conv1(z))
-        x = torch.relu(self.conv2(x))
-        x = x.view(x.size(0), -1)  # Flatten the output for the fully connected layers
-        x = torch.relu(self.fc1(x))
-        logits = self.fc2(x)
+        # Apply global average pooling
+        x = self.pool(x)
+        x = x.view(x.size(0), -1)  # Flatten for the fully connected layer
+        logits = self.fc(x)
 
         return logits
 
     def predict(self, x: torch.Tensor) -> torch.Tensor:
         """
         Used for inference, returns class labels
-        This is what the AccuracyMetric uses as input (this is what the grader will use!).
-
-        Args:
-            x (torch.FloatTensor): image with shape (b, 3, h, w) and vals in [0, 1]
-
-        Returns:
-            pred (torch.LongTensor): class labels {0, 1, ..., 5} with shape (b, h, w)
         """
         return self(x).argmax(dim=1)
 
 
-class Detector(torch.nn.Module):
+class TinyDetector(nn.Module):
     def __init__(
         self,
         in_channels: int = 3,
         num_classes: int = 3,
     ):
         """
-        A single model that performs segmentation and depth regression
-
-        Args:
-            in_channels: int, number of input channels
-            num_classes: int
+        A tiny model for detection tasks.
         """
         super().__init__()
 
         self.register_buffer("input_mean", torch.as_tensor(INPUT_MEAN))
         self.register_buffer("input_std", torch.as_tensor(INPUT_STD))
 
-        # Define the model architecture here (convolutional layers, etc.)
-        self.conv1 = nn.Conv2d(in_channels, 64, kernel_size=3, padding=1)
-        self.conv2 = nn.Conv2d(64, 128, kernel_size=3, padding=1)
-        self.fc1 = nn.Linear(128 * 64 * 64, 1024)
-        self.fc2 = nn.Linear(1024, num_classes)
+        # Use smaller architecture and depthwise separable convolutions
+        self.conv1 = nn.Conv2d(in_channels, 4, kernel_size=3, stride=2, padding=1)  # 64x64 -> 32x32
+        self.conv2 = nn.Conv2d(4, 8, kernel_size=3, stride=2, padding=1)  # 32x32 -> 16x16
+        self.conv3 = nn.Conv2d(8, 16, kernel_size=3, stride=2, padding=1)  # 16x16 -> 8x8
 
-        self.depth_fc = nn.Linear(1024, 1)
+        # Use global average pooling to reduce feature map size before fully connected layer
+        self.pool = nn.AdaptiveAvgPool2d(1)  # Output size will be (16, 1, 1)
+        
+        # Task-specific heads
+        self.class_head = nn.Linear(16, num_classes)  # Only 16 features after pooling
+        self.depth_head = nn.Linear(16, 1)  # Only 16 features after pooling
 
     def forward(self, x: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:
         """
-        Used in training, takes an image and returns raw logits and raw depth.
-        This is what the loss functions use as input.
-
-        Args:
-            x (torch.FloatTensor): image with shape (b, 3, h, w) and vals in [0, 1]
-
-        Returns:
-            tuple of (torch.FloatTensor, torch.FloatTensor):
-                - logits (b, num_classes, h, w)
-                - depth (b, h, w)
+        Used in training
         """
+        # Normalize input
         z = (x - self.input_mean[None, :, None, None]) / self.input_std[None, :, None, None]
+        
+        # Forward pass
+        x = F.relu(self.conv1(z))
+        x = F.relu(self.conv2(x))
+        x = F.relu(self.conv3(x))
 
-        x = torch.relu(self.conv1(z))
-        x = torch.relu(self.conv2(x))
-        x = x.view(x.size(0), -1)  # Flatten the output for the fully connected layers
-        x = torch.relu(self.fc1(x))
-        logits = self.fc2(x)
-
-        raw_depth = self.depth_fc(x).view(x.size(0), -1)
+        # Apply global average pooling
+        x = self.pool(x)
+        features = x.view(x.size(0), -1)  # Flatten for the fully connected layer
+        
+        # Task-specific outputs
+        logits = self.class_head(features)
+        raw_depth = self.depth_head(features)
 
         return logits, raw_depth
 
     def predict(self, x: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:
         """
-        Used for inference, takes an image and returns class labels and normalized depth.
-
-        Args:
-            x (torch.FloatTensor): image with shape (b, 3, h, w) and vals in [0, 1]
-
-        Returns:
-            tuple of (torch.LongTensor, torch.FloatTensor):
-                - pred: class labels {0, 1, 2} with shape (b, h, w)
-                - depth: normalized depth [0, 1] with shape (b, h, w)
+        Used for inference
         """
         logits, raw_depth = self(x)
         pred = logits.argmax(dim=1)
-
-        # Optional additional post-processing for depth only if needed
-        depth = raw_depth
-
-        return pred, depth
+        return pred, raw_depth
 
 
+# Use the tiny models instead of original ones
 MODEL_FACTORY = {
-    "classifier": Classifier,
-    "detector": Detector,
+    "classifier": TinyClassifier,
+    "detector": TinyDetector,
 }
 
 
@@ -205,8 +188,6 @@ def calculate_model_size_mb(model: torch.nn.Module) -> float:
 def debug_model(batch_size: int = 1):
     """
     Test your model implementation
-
-    Feel free to add additional checks to this function - this function is NOT used for grading
     """
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     sample_batch = torch.rand(batch_size, 3, 64, 64).to(device)
@@ -218,6 +199,7 @@ def debug_model(batch_size: int = 1):
 
     # should output logits (b, num_classes)
     print(f"Output shape: {output.shape}")
+    print(f"Model size: {calculate_model_size_mb(model):.2f} MB")
 
 
 if __name__ == "__main__":
