@@ -67,14 +67,13 @@ def train(
             images, depth, track = data["image"].to(device), data["depth"].to(device), data["track"].to(device)
 
             optimizer.zero_grad()  # Zero gradients from previous step
-            if track.dim() > 1:  # If track is one-hot encoded
-                track = torch.argmax(track, dim=1)  # Convert to class indices
+          
 
             # Forward pass
             logits, raw_depth = model(images)
             # Check shapes (for debugging purposes)
-            print("Logits shape:", logits.shape)  # Should be [batch_size, num_classes]
-            print("Track shape:", track.shape)  # Should be [batch_size]
+            print("Logits shape:", logits.shape)  # Should be [batch_num, size, num classes]
+            print("Track shape:", track.shape)  # Should be [batch, size]
 
             # Calculate loss (you may use a combination of classification loss and depth regression loss)
             classification_loss = F.cross_entropy(logits, track)

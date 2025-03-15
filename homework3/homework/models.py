@@ -118,10 +118,49 @@ class Detector(nn.Module):
         return pred, raw_depth
 
 
+class RoadSegmentationDepthNet(nn.Module):
+    def __init__(self, in_channels: int = 3, num_classes: int = 3):
+        super().__init__()
+
+        # Downsampling
+        self.conv1 = nn.Conv2d(in_channels, 16, kernel_size=3, stride=2, padding=1)  # 64x64 -> 32x32
+        self.conv2 = nn.Conv2d(16, 32, kernel_size=3, stride=2, padding=1)  # 32x32 -> 16x16
+        self.conv3 = nn.Conv2d(32, 64, kernel_size=3, stride=2, padding=1)  # 16x16 -> 8x8
+
+        # Upsampling
+        self.upconv1 = nn.ConvTranspose2d(64, 32, kernel_size=3, stride=2, padding=1, output_padding=1)  # 8x8 -> 16x16
+        self.upconv2 = nn.ConvTranspose2d(32, 16, kernel_size=3, stride=2, padding=1, output_padding=1)  # 16x16 -> 32x32
+        self.upconv3 = nn.ConvTranspose2d(16, 16, kernel_size=3, stride=2, padding=1, output_padding=1)  # 32x32 -> 64x64
+
+        # Classification head
+        self.class_head = nn.Conv2d(16, num_classes, kernel_size=1)
+
+        # Depth head
+        self.depth_head = nn.Conv2d(16, 1, kernel_size=1)
+
+    def forward(self, x: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:
+        # Downsampling
+        x1 = F.relu(self.conv1(x))
+        x2 = F.relu(self.conv2(x1))
+        x3 = F.relu(self.conv3(x2))
+
+        # Upsampling
+        x4 = F.relu(self.upconv1(x3))
+        x5 = F.relu(self.upconv2(x4))
+        x6 = F.relu(self.upconv3(x5))
+
+        # Output heads
+        logits = self.class_head(x6)
+        raw_depth = self.depth_head(x6)
+
+        return logits, raw_depth
+
+
 # Use the tiny models instead of original ones
 MODEL_FACTORY = {
     "classifier": Classifier,
     "detector": Detector,
+    "road_segmentation_depth_net": RoadSegmentationDepthNet,
 }
 
 
@@ -185,22 +224,4 @@ def calculate_model_size_mb(model: torch.nn.Module) -> float:
     return sum(p.numel() for p in model.parameters()) * 4 / 1024 / 1024
 
 
-def debug_model(batch_size: int = 1):
-    """
-    Test your model implementation
-    """
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    sample_batch = torch.rand(batch_size, 3, 64, 64).to(device)
 
-    print(f"Input shape: {sample_batch.shape}")
-
-    model = load_model("classifier", in_channels=3, num_classes=6).to(device)
-    output = model(sample_batch)
-
-    # should output logits (b, num_classes)
-    print(f"Output shape: {output.shape}")
-    print(f"Model size: {calculate_model_size_mb(model):.2f} MB")
-
-
-if __name__ == "__main__":
-    debug_model()
