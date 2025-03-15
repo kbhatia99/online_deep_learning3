@@ -65,7 +65,7 @@ def train(
 
         # Training step
         for data in train_data:
-            images, depth, labels = data["image"].to(device), data["depth"].to(device), data["label"].to(device)
+            images, depth, track = data["image"].to(device), data["depth"].to(device), data["track"].to(device)
 
             optimizer.zero_grad()  # Zero gradients from previous step
 
