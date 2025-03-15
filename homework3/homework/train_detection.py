@@ -42,8 +42,8 @@ def train(
     model.train()
 
     # Load data
-    train_data = load_data("road_data/train", shuffle=True, batch_size=batch_size, num_workers=2)
-    val_data = load_data("road_data/val", shuffle=False)
+    train_data = load_data("drive_data/train", shuffle=True, batch_size=batch_size, num_workers=2)
+    val_data = load_data("drive_data/val", shuffle=False)
 
     # Create loss function and optimizer
     optimizer = optim.Adam(model.parameters(), lr=lr)
