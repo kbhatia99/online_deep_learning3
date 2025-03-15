@@ -62,63 +62,6 @@ class Classifier(nn.Module):
 
 
 class Detector(nn.Module):
-    def __init__(
-        self,
-        in_channels: int = 3,
-        num_classes: int = 3,
-    ):
-        """
-        A tiny model for detection tasks.
-        """
-        super().__init__()
-
-        self.register_buffer("input_mean", torch.as_tensor(INPUT_MEAN))
-        self.register_buffer("input_std", torch.as_tensor(INPUT_STD))
-
-        # Use smaller architecture and depthwise separable convolutions
-        self.conv1 = nn.Conv2d(in_channels, 4, kernel_size=3, stride=2, padding=1)  # 64x64 -> 32x32
-        self.conv2 = nn.Conv2d(4, 8, kernel_size=3, stride=2, padding=1)  # 32x32 -> 16x16
-        self.conv3 = nn.Conv2d(8, 16, kernel_size=3, stride=2, padding=1)  # 16x16 -> 8x8
-
-        # Use global average pooling to reduce feature map size before fully connected layer
-        self.pool = nn.AdaptiveAvgPool2d(1)  # Output size will be (16, 1, 1)
-        
-        # Task-specific heads
-        self.class_head = nn.Linear(16, num_classes)  # Only 16 features after pooling
-        self.depth_head = nn.Linear(16, 1)  # Only 16 features after pooling
-
-    def forward(self, x: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:
-        """
-        Used in training
-        """
-        # Normalize input
-        z = (x - self.input_mean[None, :, None, None]) / self.input_std[None, :, None, None]
-        
-        # Forward pass
-        x = F.relu(self.conv1(z))
-        x = F.relu(self.conv2(x))
-        x = F.relu(self.conv3(x))
-
-        # Apply global average pooling
-        x = self.pool(x)
-        features = x.view(x.size(0), -1)  # Flatten for the fully connected layer
-        
-        # Task-specific outputs
-        logits = self.class_head(features)
-        raw_depth = self.depth_head(features)
-
-        return logits, raw_depth
-
-    def predict(self, x: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:
-        """
-        Used for inference
-        """
-        logits, raw_depth = self(x)
-        pred = logits.argmax(dim=1)
-        return pred, raw_depth
-
-
-class RoadSegmentationDepthNet(nn.Module):
     def __init__(self, in_channels: int = 3, num_classes: int = 3):
         super().__init__()
 
@@ -155,12 +98,22 @@ class RoadSegmentationDepthNet(nn.Module):
 
         return logits, raw_depth
 
+    def predict(self, x):
+        """Method required by the grader. Runs forward pass and returns predictions."""
+        self.eval()  # Ensure the model is in evaluation mode
+        with torch.no_grad():
+            logits, raw_depth = self.forward(x)
+            pred_classes = torch.argmax(logits, dim=1)  # Convert logits to class labels
+        return pred_classes, raw_depth
+
+
+
 
 # Use the tiny models instead of original ones
 MODEL_FACTORY = {
     "classifier": Classifier,
     "detector": Detector,
-    "road_segmentation_depth_net": RoadSegmentationDepthNet,
+   
 }
 
 
