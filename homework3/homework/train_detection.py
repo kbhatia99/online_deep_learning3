@@ -5,8 +5,8 @@ import torch
 import torch.optim as optim
 import torch.utils.tensorboard as tb
 import numpy as np
-from .models import Detector, save_model
-from .utils import load_data
+from .models import load_model, save_model
+from homework.datasets.road_dataset import load_data
 from torch.nn import functional as F
 
 
@@ -36,7 +36,8 @@ def train(
     logger = tb.SummaryWriter(log_dir)
 
     # Load model
-    model = Detector(**kwargs)
+  
+    model = load_model(model_name, **kwargs)
     model = model.to(device)
     model.train()
 

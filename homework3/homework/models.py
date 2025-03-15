@@ -8,7 +8,7 @@ INPUT_MEAN = [0.2788, 0.2657, 0.2629]
 INPUT_STD = [0.2064, 0.1944, 0.2252]
 
 
-class TinyClassifier(nn.Module):
+class Classifier(nn.Module):
     def __init__(
         self,
         in_channels: int = 3,
@@ -61,7 +61,7 @@ class TinyClassifier(nn.Module):
         return self(x).argmax(dim=1)
 
 
-class TinyDetector(nn.Module):
+class Detector(nn.Module):
     def __init__(
         self,
         in_channels: int = 3,
@@ -120,8 +120,8 @@ class TinyDetector(nn.Module):
 
 # Use the tiny models instead of original ones
 MODEL_FACTORY = {
-    "classifier": TinyClassifier,
-    "detector": TinyDetector,
+    "classifier": Classifier,
+    "detector": Detector,
 }
 
 
