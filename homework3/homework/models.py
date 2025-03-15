@@ -15,41 +15,52 @@ class Classifier(nn.Module):
         num_classes: int = 6,
     ):
         """
-        A tiny convolutional network for image classification.
+        A more complex convolutional network for image classification with additional layers and filters.
         """
         super().__init__()
 
         self.register_buffer("input_mean", torch.as_tensor(INPUT_MEAN))
         self.register_buffer("input_std", torch.as_tensor(INPUT_STD))
 
-        # Use even smaller architecture with depthwise separable convolutions
-        self.conv1 = nn.Conv2d(in_channels, 4, kernel_size=3, stride=2, padding=1)  # 64x64 -> 32x32
-        self.conv2 = nn.Conv2d(4, 8, kernel_size=3, stride=2, padding=1)  # 32x32 -> 16x16
-        self.conv3 = nn.Conv2d(8, 16, kernel_size=3, stride=2, padding=1)  # 16x16 -> 8x8
+        # Increased number of filters in each layer
+        self.conv1 = nn.Conv2d(in_channels, 32, kernel_size=3, stride=2, padding=1)  # 64x64 -> 32x32
+        self.conv2 = nn.Conv2d(32, 64, kernel_size=3, stride=2, padding=1)  # 32x32 -> 16x16
+        self.conv3 = nn.Conv2d(64, 128, kernel_size=3, stride=2, padding=1)  # 16x16 -> 8x8
+        self.conv4 = nn.Conv2d(128, 256, kernel_size=3, stride=2, padding=1)  # 8x8 -> 4x4
+        self.conv5 = nn.Conv2d(256, 512, kernel_size=3, stride=2, padding=1)  # 4x4 -> 2x2
 
-        # Use global average pooling to reduce feature map size before fully connected layer
-        self.pool = nn.AdaptiveAvgPool2d(1)  # Output size will be (16, 1, 1)
-        self.fc = nn.Linear(16, num_classes)  # Only 16 features after pooling
+        # Batch Normalization to help with training stability (optional but recommended)
+        self.bn1 = nn.BatchNorm2d(32)
+        self.bn2 = nn.BatchNorm2d(64)
+        self.bn3 = nn.BatchNorm2d(128)
+        self.bn4 = nn.BatchNorm2d(256)
+        self.bn5 = nn.BatchNorm2d(512)
+
+        # Global Average Pooling to reduce feature map size
+        self.pool = nn.AdaptiveAvgPool2d(1)  # Output size will be (512, 1, 1)
+        
+        # Fully connected layer after pooling
+        self.fc = nn.Linear(512, num_classes)  # 512 features after pooling
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         """
-        Args:
-            x: tensor (b, 3, h, w) image
-
-        Returns:
-            tensor (b, num_classes) logits
+        Forward pass through the network.
         """
         # Normalize input
         z = (x - self.input_mean[None, :, None, None]) / self.input_std[None, :, None, None]
-        
-        # Forward pass
-        x = F.relu(self.conv1(z))
-        x = F.relu(self.conv2(x))
-        x = F.relu(self.conv3(x))
 
-        # Apply global average pooling
+        # Convolutional layers with Batch Normalization and ReLU activation
+        x = F.relu(self.bn1(self.conv1(z)))
+        x = F.relu(self.bn2(self.conv2(x)))
+        x = F.relu(self.bn3(self.conv3(x)))
+        x = F.relu(self.bn4(self.conv4(x)))
+        x = F.relu(self.bn5(self.conv5(x)))
+
+        # Global average pooling
         x = self.pool(x)
         x = x.view(x.size(0), -1)  # Flatten for the fully connected layer
+
+        # Fully connected layer
         logits = self.fc(x)
 
         return logits
@@ -59,6 +70,7 @@ class Classifier(nn.Module):
         Used for inference, returns class labels
         """
         return self(x).argmax(dim=1)
+
 
 
 class Detector(nn.Module):
