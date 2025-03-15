@@ -73,7 +73,7 @@ def train(
             logits, raw_depth = model(images)
 
             # Calculate loss (you may use a combination of classification loss and depth regression loss)
-            classification_loss = F.cross_entropy(logits, labels)
+            classification_loss = F.cross_entropy(logits, track)
             depth_loss = F.mse_loss(raw_depth, depth)
             loss = classification_loss + depth_loss
 
@@ -83,7 +83,7 @@ def train(
 
             # Track accuracy
             _, predicted = torch.max(logits, 1)
-            correct_train += (predicted == labels).sum().item()
+            correct_train += (predicted == track).sum().item()
             total_train += labels.size(0)
             total_train_loss += loss.item()
 
@@ -104,18 +104,18 @@ def train(
 
             # Validation step
             for data in val_data:
-                images, depth, labels = data["image"].to(device), data["depth"].to(device), data["label"].to(device)
+                images, depth, labels = data["image"].to(device), data["depth"].to(device), data["track"].to(device)
 
                 logits, raw_depth = model(images)
 
                 # Calculate loss
-                classification_loss = F.cross_entropy(logits, labels)
+                classification_loss = F.cross_entropy(logits, track)
                 depth_loss = F.mse_loss(raw_depth, depth)
                 loss = classification_loss + depth_loss
 
                 # Track accuracy
                 _, predicted = torch.max(logits, 1)
-                correct_val += (predicted == labels).sum().item()
+                correct_val += (predicted == track).sum().item()
                 total_val += labels.size(0)
                 total_val_loss += loss.item()
 
