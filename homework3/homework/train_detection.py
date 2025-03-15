@@ -36,7 +36,6 @@ def train(
     logger = tb.SummaryWriter(log_dir)
 
     # Load model
-  
     model = load_model(model_name, **kwargs)
     model = model.to(device)
     model.train()
@@ -68,9 +67,14 @@ def train(
             images, depth, track = data["image"].to(device), data["depth"].to(device), data["track"].to(device)
 
             optimizer.zero_grad()  # Zero gradients from previous step
+            if track.dim() > 1:  # If track is one-hot encoded
+                track = torch.argmax(track, dim=1)  # Convert to class indices
 
             # Forward pass
             logits, raw_depth = model(images)
+            # Check shapes (for debugging purposes)
+            print("Logits shape:", logits.shape)  # Should be [batch_size, num_classes]
+            print("Track shape:", track.shape)  # Should be [batch_size]
 
             # Calculate loss (you may use a combination of classification loss and depth regression loss)
             classification_loss = F.cross_entropy(logits, track)
@@ -84,7 +88,7 @@ def train(
             # Track accuracy
             _, predicted = torch.max(logits, 1)
             correct_train += (predicted == track).sum().item()
-            total_train += labels.size(0)
+            total_train += track.size(0)
             total_train_loss += loss.item()
 
             global_step += 1
@@ -109,18 +113,18 @@ def train(
                 logits, raw_depth = model(images)
 
                 # Calculate loss
-                classification_loss = F.cross_entropy(logits, track)
+                classification_loss = F.cross_entropy(logits, labels)
                 depth_loss = F.mse_loss(raw_depth, depth)
                 loss = classification_loss + depth_loss
 
                 # Track accuracy
                 _, predicted = torch.max(logits, 1)
-                correct_val += (predicted == track).sum().item()
+                correct_val += (predicted == labels).sum().item()
                 total_val += labels.size(0)
                 total_val_loss += loss.item()
 
             val_acc = correct_val / total_val
-            val_loss = total_val_loss / len(val_data)
+            val_loss = total_val_loss / total_val
             metrics["val_loss"].append(val_loss)
             metrics["val_acc"].append(val_acc)
 
