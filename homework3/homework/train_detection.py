@@ -77,7 +77,7 @@ def train(
 
             # Calculate loss (you may use a combination of classification loss and depth regression loss)
             classification_loss = F.cross_entropy(logits, track)
-            depth_loss = F.mse_loss(raw_depth, depth)
+            depth_loss = F.mse_loss(raw_depth, depth.unsqueeze(1))
             loss = classification_loss + depth_loss
 
             # Backward pass and optimization

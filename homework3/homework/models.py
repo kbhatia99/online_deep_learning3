@@ -79,13 +79,19 @@ class Detector(nn.Module):
 
         # Downsampling
         self.conv1 = nn.Conv2d(in_channels, 16, kernel_size=3, stride=2, padding=1)  # 64x64 -> 32x32
+        self.bn1 = nn.BatchNorm2d(16)
         self.conv2 = nn.Conv2d(16, 32, kernel_size=3, stride=2, padding=1)  # 32x32 -> 16x16
+        self.bn2 = nn.BatchNorm2d(32)
         self.conv3 = nn.Conv2d(32, 64, kernel_size=3, stride=2, padding=1)  # 16x16 -> 8x8
+        self.bn3 = nn.BatchNorm2d(64)
 
         # Upsampling
         self.upconv1 = nn.ConvTranspose2d(64, 32, kernel_size=3, stride=2, padding=1, output_padding=1)  # 8x8 -> 16x16
+        self.bn4 = nn.BatchNorm2d(32)
         self.upconv2 = nn.ConvTranspose2d(32, 16, kernel_size=3, stride=2, padding=1, output_padding=1)  # 16x16 -> 32x32
+        self.bn5 = nn.BatchNorm2d(16)
         self.upconv3 = nn.ConvTranspose2d(16, 16, kernel_size=3, stride=2, padding=1, output_padding=1)  # 32x32 -> 64x64
+        self.bn6 = nn.BatchNorm2d(16)
 
         # Classification head
         self.class_head = nn.Conv2d(16, num_classes, kernel_size=1)
@@ -95,28 +101,44 @@ class Detector(nn.Module):
 
     def forward(self, x: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:
         # Downsampling
-        x1 = F.relu(self.conv1(x))
-        x2 = F.relu(self.conv2(x1))
-        x3 = F.relu(self.conv3(x2))
+        x1 = F.relu(self.bn1(self.conv1(x)))
+        x2 = F.relu(self.bn2(self.conv2(x1)))
+        x3 = F.relu(self.bn3(self.conv3(x2)))
 
         # Upsampling
-        x4 = F.relu(self.upconv1(x3))
-        x5 = F.relu(self.upconv2(x4))
-        x6 = F.relu(self.upconv3(x5))
+        x4 = F.relu(self.bn4(self.upconv1(x3)))
+        x5 = F.relu(self.bn5(self.upconv2(x4)))
+        x6 = F.relu(self.bn6(self.upconv3(x5)))
 
         # Output heads
-        logits = self.class_head(x6)
-        raw_depth = self.depth_head(x6)
+        logits = self.class_head(x6)  # Segmentation output
+        raw_depth = self.depth_head(x6)  # Depth estimation output
 
         return logits, raw_depth
 
-    def predict(self, x):
-        """Method required by the grader. Runs forward pass and returns predictions."""
-        self.eval()  # Ensure the model is in evaluation mode
-        with torch.no_grad():
-            logits, raw_depth = self.forward(x)
-            pred_classes = torch.argmax(logits, dim=1)  # Convert logits to class labels
-        return pred_classes, raw_depth
+
+
+
+    def predict(self, x: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:
+        """
+        Used for inference, takes an image and returns class labels and normalized depth.
+        This is what the metrics use as input (this is what the grader will use!).
+
+        Args:
+            x (torch.FloatTensor): image with shape (b, 3, h, w) and vals in [0, 1]
+
+        Returns:
+            tuple of (torch.LongTensor, torch.FloatTensor):
+                - pred: class labels {0, 1, 2} with shape (b, h, w)
+                - depth: normalized depth [0, 1] with shape (b, h, w)
+        """
+        logits, raw_depth = self(x)
+        pred = logits.argmax(dim=1)
+
+        # Optional additional post-processing for depth only if needed
+        depth = raw_depth
+
+        return pred, depth
 
 
 
