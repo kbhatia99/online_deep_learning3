@@ -29,7 +29,7 @@ class Classifier(nn.Module):
         self.conv4 = nn.Conv2d(128, 256, kernel_size=3, stride=2, padding=1)  # 8x8 -> 4x4
         self.conv5 = nn.Conv2d(256, 512, kernel_size=3, stride=2, padding=1)  # 4x4 -> 2x2
 
-        # Batch Normalization to help with training stability (optional but recommended)
+        # Batch Normalization
         self.bn1 = nn.BatchNorm2d(32)
         self.bn2 = nn.BatchNorm2d(64)
         self.bn3 = nn.BatchNorm2d(128)
@@ -214,6 +214,5 @@ def calculate_model_size_mb(model: torch.nn.Module) -> float:
         float, size in megabytes
     """
     return sum(p.numel() for p in model.parameters()) * 4 / 1024 / 1024
-
 
 
