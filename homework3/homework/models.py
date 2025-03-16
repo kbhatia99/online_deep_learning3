@@ -119,6 +119,7 @@ class Detector(nn.Module):
 
 
 
+
     def predict(self, x: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:
         """
         Used for inference, takes an image and returns class labels and normalized depth.
@@ -133,12 +134,16 @@ class Detector(nn.Module):
                 - depth: normalized depth [0, 1] with shape (b, h, w)
         """
         logits, raw_depth = self(x)
-        pred = logits.argmax(dim=1)
+        
+        # Get the predicted class labels by taking argmax on logits
+        pred = logits.argmax(dim=1)  # (b, h, w)
 
-        # Optional additional post-processing for depth only if needed
-        depth = raw_depth
+        # Normalize depth to range [0, 1] if needed
+        depth = raw_depth.squeeze(1)  # Remove the channel dimension, shape (b, h, w)
+        depth = (depth - depth.min()) / (depth.max() - depth.min())  # Normalize to [0, 1]
 
         return pred, depth
+
 
 
 
