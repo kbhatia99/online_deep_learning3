@@ -139,8 +139,16 @@ class Detector(nn.Module):
         # Classification head
         self.class_head = nn.Conv2d(16, num_classes, kernel_size=1)
 
-        # Depth head
-        self.depth_head = nn.Conv2d(16, 1, kernel_size=1)
+        # Depth head with more convolutional layers
+        self.depth_head = nn.Sequential(
+            nn.Conv2d(16, 32, kernel_size=3, padding=1),  # Increase depth channels
+            nn.BatchNorm2d(32),
+            nn.ReLU(inplace=True),
+            nn.Conv2d(32, 64, kernel_size=3, padding=1),  # Extra convolutional layer
+            nn.BatchNorm2d(64),
+            nn.ReLU(inplace=True),
+            nn.Conv2d(64, 1, kernel_size=1)  # Final depth output
+        )
 
     def forward(self, x: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:
         # Downsampling (Encoder)
@@ -166,6 +174,7 @@ class Detector(nn.Module):
         raw_depth = self.depth_head(x6)  # Depth estimation output
 
         return logits, raw_depth
+
 
 
 
