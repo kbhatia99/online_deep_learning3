@@ -77,25 +77,63 @@ class Detector(nn.Module):
     def __init__(self, in_channels: int = 3, num_classes: int = 3):
         super().__init__()
 
-        # Downsampling
-        self.conv1 = nn.Conv2d(in_channels, 16, kernel_size=3, stride=2, padding=1)  # 64x64 -> 32x32
-        self.bn1 = nn.BatchNorm2d(16)
-        self.conv2 = nn.Conv2d(16, 32, kernel_size=3, stride=2, padding=1)  # 32x32 -> 16x16
-        self.bn2 = nn.BatchNorm2d(32)
-        self.conv3 = nn.Conv2d(32, 64, kernel_size=3, stride=2, padding=1)  # 16x16 -> 8x8
-        self.bn3 = nn.BatchNorm2d(64)
+        # Downsampling with extra convolutional layers
+        self.conv1 = nn.Sequential(
+            nn.Conv2d(in_channels, 16, kernel_size=3, stride=2, padding=1),  # 64x64 -> 32x32
+            nn.BatchNorm2d(16),
+            nn.ReLU(inplace=True),
+            nn.Conv2d(16, 16, kernel_size=3, padding=1),  # Extra conv layer
+            nn.BatchNorm2d(16),
+            nn.ReLU(inplace=True)
+        )
 
-        # Upsampling with skip connections
-        self.upconv1 = nn.ConvTranspose2d(64, 32, kernel_size=3, stride=2, padding=1, output_padding=1)  # 8x8 -> 16x16
-        self.bn4 = nn.BatchNorm2d(32)
+        self.conv2 = nn.Sequential(
+            nn.Conv2d(16, 32, kernel_size=3, stride=2, padding=1),  # 32x32 -> 16x16
+            nn.BatchNorm2d(32),
+            nn.ReLU(inplace=True),
+            nn.Conv2d(32, 32, kernel_size=3, padding=1),  # Extra conv layer
+            nn.BatchNorm2d(32),
+            nn.ReLU(inplace=True)
+        )
+
+        self.conv3 = nn.Sequential(
+            nn.Conv2d(32, 64, kernel_size=3, stride=2, padding=1),  # 16x16 -> 8x8
+            nn.BatchNorm2d(64),
+            nn.ReLU(inplace=True),
+            nn.Conv2d(64, 64, kernel_size=3, padding=1),  # Extra conv layer
+            nn.BatchNorm2d(64),
+            nn.ReLU(inplace=True)
+        )
+
+        # Upsampling with extra convolutional layers
+        self.upconv1 = nn.Sequential(
+            nn.ConvTranspose2d(64, 32, kernel_size=3, stride=2, padding=1, output_padding=1),  # 8x8 -> 16x16
+            nn.BatchNorm2d(32),
+            nn.ReLU(inplace=True),
+            nn.Conv2d(32, 32, kernel_size=3, padding=1),  # Extra conv layer
+            nn.BatchNorm2d(32),
+            nn.ReLU(inplace=True)
+        )
         self.conv_up1 = nn.Conv2d(32 + 32, 32, kernel_size=3, padding=1)  # Merge with skip
 
-        self.upconv2 = nn.ConvTranspose2d(32, 16, kernel_size=3, stride=2, padding=1, output_padding=1)  # 16x16 -> 32x32
-        self.bn5 = nn.BatchNorm2d(16)
+        self.upconv2 = nn.Sequential(
+            nn.ConvTranspose2d(32, 16, kernel_size=3, stride=2, padding=1, output_padding=1),  # 16x16 -> 32x32
+            nn.BatchNorm2d(16),
+            nn.ReLU(inplace=True),
+            nn.Conv2d(16, 16, kernel_size=3, padding=1),  # Extra conv layer
+            nn.BatchNorm2d(16),
+            nn.ReLU(inplace=True)
+        )
         self.conv_up2 = nn.Conv2d(16 + 16, 16, kernel_size=3, padding=1)  # Merge with skip
 
-        self.upconv3 = nn.ConvTranspose2d(16, 8, kernel_size=3, stride=2, padding=1, output_padding=1)  # 32x32 -> 64x64
-        self.bn6 = nn.BatchNorm2d(8)
+        self.upconv3 = nn.Sequential(
+            nn.ConvTranspose2d(16, 8, kernel_size=3, stride=2, padding=1, output_padding=1),  # 32x32 -> 64x64
+            nn.BatchNorm2d(8),
+            nn.ReLU(inplace=True),
+            nn.Conv2d(8, 8, kernel_size=3, padding=1),  # Extra conv layer
+            nn.BatchNorm2d(8),
+            nn.ReLU(inplace=True)
+        )
         self.conv_up3 = nn.Conv2d(8 + in_channels, 16, kernel_size=3, padding=1)  # Merge with input skip
 
         # Classification head
@@ -106,20 +144,20 @@ class Detector(nn.Module):
 
     def forward(self, x: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:
         # Downsampling (Encoder)
-        x1 = F.relu(self.bn1(self.conv1(x)))  # 32x32
-        x2 = F.relu(self.bn2(self.conv2(x1)))  # 16x16
-        x3 = F.relu(self.bn3(self.conv3(x2)))  # 8x8
+        x1 = self.conv1(x)  # 32x32
+        x2 = self.conv2(x1)  # 16x16
+        x3 = self.conv3(x2)  # 8x8
 
-        # Upsampling (Decoder) with skip connections using torch.cat
-        x4 = F.relu(self.bn4(self.upconv1(x3)))  # 16x16
+        # Upsampling (Decoder) with skip connections
+        x4 = self.upconv1(x3)  # 16x16
         x4 = torch.cat([x4, x2], dim=1)  # Skip connection
         x4 = F.relu(self.conv_up1(x4))  # Reduce channels back
 
-        x5 = F.relu(self.bn5(self.upconv2(x4)))  # 32x32
+        x5 = self.upconv2(x4)  # 32x32
         x5 = torch.cat([x5, x1], dim=1)  # Skip connection
         x5 = F.relu(self.conv_up2(x5))  # Reduce channels back
 
-        x6 = F.relu(self.bn6(self.upconv3(x5)))  # 64x64
+        x6 = self.upconv3(x5)  # 64x64
         x6 = torch.cat([x6, x], dim=1)  # Skip connection with input
         x6 = F.relu(self.conv_up3(x6))  # Reduce channels back
 
@@ -128,7 +166,6 @@ class Detector(nn.Module):
         raw_depth = self.depth_head(x6)  # Depth estimation output
 
         return logits, raw_depth
-
 
 
 
