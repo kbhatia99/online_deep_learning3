@@ -10,6 +10,26 @@ from homework.datasets.road_dataset import load_data
 from torch.nn import functional as F
 
 
+# IoU Score Function
+def iou_score(pred, target, num_classes=3):
+    iou_list = []
+    pred = pred.view(-1)
+    target = target.view(-1)
+    
+    for cls in range(num_classes):
+        # True positives, false positives, false negatives
+        intersection = ((pred == cls) & (target == cls)).sum().item()
+        union = ((pred == cls) | (target == cls)).sum().item()
+        
+        if union == 0:
+            iou = float('nan')  # if there are no positive samples, IoU is undefined
+        else:
+            iou = intersection / union
+        iou_list.append(iou)
+        
+    return torch.tensor(iou_list).mean()
+
+
 def train(
     exp_dir: str = "logs",
     model_name: str = "detector",
@@ -17,6 +37,9 @@ def train(
     lr: float = 1e-3,
     batch_size: int = 32,
     seed: int = 2024,
+    alpha: float = 1.0,   # Weight for classification loss
+    beta: float = 1.0,    # Weight for depth loss
+    gamma: float = 1.0,   # Weight for IoU loss
     **kwargs,
 ):
     if torch.cuda.is_available():
@@ -44,7 +67,7 @@ def train(
     train_data = load_data("drive_data/train", shuffle=True, batch_size=batch_size, num_workers=2)
     val_data = load_data("drive_data/val", shuffle=False)
 
-    # Create loss function and optimizer
+    # Create optimizer
     optimizer = optim.Adam(model.parameters(), lr=lr)
 
     global_step = 0
@@ -52,7 +75,7 @@ def train(
 
     # Training loop
     for epoch in range(num_epoch):
-        # clear metrics at beginning of epoch
+        # Clear metrics at the beginning of each epoch
         for key in metrics:
             metrics[key].clear()
 
@@ -67,18 +90,23 @@ def train(
             images, depth, track = data["image"].to(device), data["depth"].to(device), data["track"].to(device)
 
             optimizer.zero_grad()  # Zero gradients from previous step
-          
 
             # Forward pass
             logits, raw_depth = model(images)
-            # Check shapes (for debugging purposes)
             print("Logits shape:", logits.shape)  # Should be [batch_num, size, num classes]
             print("Track shape:", track.shape)  # Should be [batch, size]
 
-            # Calculate loss (you may use a combination of classification loss and depth regression loss)
+            # Calculate losses
             classification_loss = F.cross_entropy(logits, track)
             depth_loss = F.mse_loss(raw_depth, depth.unsqueeze(1))
-            loss = classification_loss + depth_loss
+
+            # Compute IoU loss
+            _, predicted = torch.max(logits, 1)
+            iou = iou_score(predicted, track)
+            iou_loss = 1 - iou
+
+            # Apply weights to the losses
+            loss = (alpha * classification_loss) + (beta * depth_loss) + (gamma * iou_loss)
 
             # Backward pass and optimization
             loss.backward()
@@ -111,10 +139,17 @@ def train(
 
                 logits, raw_depth = model(images)
 
-                # Calculate loss
+                # Calculate losses
                 classification_loss = F.cross_entropy(logits, labels)
                 depth_loss = F.mse_loss(raw_depth, depth)
-                loss = classification_loss + depth_loss
+
+                # Compute IoU loss for validation
+                _, predicted = torch.max(logits, 1)
+                iou = iou_score(predicted, labels)
+                iou_loss = 1 - iou
+
+                # Apply weights to the losses
+                loss = (alpha * classification_loss) + (beta * depth_loss) + (gamma * iou_loss)
 
                 # Track accuracy
                 _, predicted = torch.max(logits, 1)
@@ -162,6 +197,9 @@ if __name__ == "__main__":
     parser.add_argument("--num_epoch", type=int, default=50)
     parser.add_argument("--lr", type=float, default=1e-3)
     parser.add_argument("--seed", type=int, default=2024)
+    parser.add_argument("--alpha", type=float, default=1.0)   # Weight for classification loss
+    parser.add_argument("--beta", type=float, default=1.0)    # Weight for depth loss
+    parser.add_argument("--gamma", type=float, default=1.0)   # Weight for IoU loss
 
     # pass all arguments to train
     train(**vars(parser.parse_args()))
