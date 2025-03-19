@@ -98,15 +98,15 @@ def train(
 
             # Calculate losses
             classification_loss = F.cross_entropy(logits, track)
-            depth_loss = F.mse_loss(raw_depth, depth.unsqueeze(1))
+            depth_loss = F.mse_loss(raw_depth, depth)
 
             # Compute IoU loss
-            _, predicted = torch.max(logits, 1)
-            iou = iou_score(predicted, track)
-            iou_loss = 1 - iou
+            #_, predicted = torch.max(logits, 1)
+            #iou = iou_score(predicted, track)
+            #iou_loss = 1 - iou
 
             # Apply weights to the losses
-            loss = (alpha * classification_loss) + (beta * depth_loss) + (gamma * iou_loss)
+            loss = (alpha * classification_loss) + (beta * depth_loss) #+ (gamma * iou_loss)
 
             # Backward pass and optimization
             loss.backward()
