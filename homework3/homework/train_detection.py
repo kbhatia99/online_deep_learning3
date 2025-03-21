@@ -35,6 +35,7 @@ def train(
     model_name: str = "detector",
     num_epoch: int = 50,
     lr: float = 1e-3,
+    weight_decay: float = 1e-3,
     batch_size: int = 32,
     seed: int = 2024,
     alpha: float = 1.0,   # Weight for classification loss
@@ -68,7 +69,7 @@ def train(
     val_data = load_data("drive_data/val", shuffle=False)
 
     # Create optimizer
-    optimizer = optim.Adam(model.parameters(), lr=lr)
+    optimizer = optim.Adam(model.parameters(), lr=lr, weight_decay=weight_decay)
 
     global_step = 0
     metrics = {"train_loss": [], "val_loss": [], "train_acc": [], "val_acc": []}
