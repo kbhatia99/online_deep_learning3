@@ -221,7 +221,7 @@ class Detector(nn.Module):
 
         # Normalize depth to range [0, 1] if needed
         depth = raw_depth.squeeze(1)  # Remove the channel dimension, shape (b, h, w)
-        depth = (depth - depth.min()) / (depth.max() - depth.min())  # Normalize to [0, 1]
+        #depth = (depth - depth.min()) / (depth.max() - depth.min())  # Normalize to [0, 1]
 
         return pred, depth
 
